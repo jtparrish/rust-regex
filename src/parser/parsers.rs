@@ -18,10 +18,7 @@ pub fn any_char(input: &str) -> ParserResult<char> {
 }
 
 pub fn regex_literal<'a>() -> impl Parser<'a, ParseElement> {
-    one_or_more(
-        not_but(quantified_character(),
-                either(any_char.predicate(|c| not_reserved(c)),escaped_character())
-        )).map(|v| ParseElement::Literal(v.iter().collect()))
+    either(any_char.predicate(|c| not_reserved(c)), escaped_character()).map(|c| ParseElement::MatchChar(c))
 }
 
 pub fn escaped_character<'a>() -> impl Parser<'a, char> {

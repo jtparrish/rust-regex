@@ -62,8 +62,9 @@ pub mod parsers;
 pub mod combinators;
 
 pub enum ParseElement {
-    Literal(String),
-    Quantified(Box<ParseElement>, Quantifier)
+    MatchChar(char),
+    MatchSet,
+    Quantified(Box<ParseElement>, Quantifier),
 }
 
 pub enum Quantifier {
