@@ -1,3 +1,9 @@
+#[macro_use]
+mod macros;
+
+pub mod parsers;
+pub mod combinators;
+
 #[derive(Debug, PartialEq)]
 pub enum ParserError {
     Error(String),
@@ -58,20 +64,25 @@ impl<'a, T> Parser<'a, T> for BoxedParser<'a, T> {
     }
 }
 
-pub mod parsers;
-pub mod combinators;
-
-pub enum ParseElement {
-    MatchChar(char),
-    MatchSet,
-    Quantified(Box<ParseElement>, Quantifier),
+pub enum Token {
+    Char(char),
+    Set,
+    Group,
+    Unimpl,
 }
 
+// pub struct Expression;
+
 pub enum Quantifier {
+    Lazy(RawQuantifier),
+    Greedy(RawQuantifier),
+}
+
+pub enum RawQuantifier {
     Kleene,
     Plus,
     Possible,
-    Range(usize, usize),
+    Range(usize, Option<usize>),
 }
 
 //TODO
@@ -167,5 +178,15 @@ mod tests {
 
         assert_eq!(Ok((' ', "hello")), white_space_remover.parse(leading_space));
         assert_eq!(Err(ParserError::Error("hello".to_owned())), white_space_remover.parse(no_leading_space))
+    }
+}
+
+pub struct UnimplementedParser<'a, T> {
+    phantom: std::marker::PhantomData<&'a T>,
+}
+
+impl<'a, T> Parser<'a, T> for UnimplementedParser<'a, T> {
+    fn parse(&self, _input: &'a str) -> ParserResult<'a, T> {
+        unimplemented!()
     }
 }

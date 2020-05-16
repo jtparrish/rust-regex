@@ -1,4 +1,4 @@
-use super::{Parser, ParserError, ParseElement};
+use super::{Parser, ParserError};
 
 pub fn map<'a, P, F, A, B>(parser: P, map_fn: F) -> impl Parser<'a, B> 
     where
@@ -67,6 +67,13 @@ pub fn one_or_more<'a, P, R>(p: P) -> impl Parser<'a, Vec<R>>
     repeat_range(p, 1, None)
 }
 
+pub fn optional<'a, P, R>(p: P) -> impl Parser<'a, Option<R>>
+    where
+        P: Parser<'a, R>,
+{
+    map(repeat_range(p, 0, Some(2)), |mut v| v.pop())
+}
+
 pub fn predicate<'a, P, R, F>(parser: P, pred: F) -> impl Parser<'a, R>
     where
         P: Parser<'a, R>,
@@ -94,25 +101,49 @@ pub fn either<'a, P1, P2, R>(p1: P1, p2: P2) -> impl Parser<'a, R>
     move |input| p1.parse(input).or(p2.parse(input))
 }
 
-pub fn not<'a, P, R>(p: P) -> impl Parser<'a, ()>
-    where P: Parser<'a, R>,
+pub fn one_of<'a, R, I, P>(iterable: I) -> impl Parser<'a, R>
+    where
+        I: std::iter::IntoIterator,
+        I::Item: Parser<'a, R>,
 {
+    let keepable_iterable = ReferenceIteratorGenerator::new(iterable);
+    //not particularly efficient but very clean
+    //actually map is lazily evaluated (I think) so this is actually near optimal
     move |input|
-        if p.parse(input).is_err() {Ok(( (), input ))} else {Err(ParserError::UnexpectedMatch(input.to_owned()))}
+        match keepable_iterable.iter().map(|x| x.parse(input)).filter(|res| res.is_ok()).next() {
+            Some(ok) => ok,
+            None => Err(ParserError::Error(input.to_owned())),
+        }
 }
 
-pub fn not_but<'a, P1, R1, P2, R2>(p1: P1, p2: P2) -> impl Parser<'a, R2>
-    where
-        P1: Parser<'a, R1>,
-        P2: Parser<'a, R2>,
-{
-    right(not(p1), p2)
+struct ReferenceIteratorGenerator<T> {
+    container: Vec<T>,
 }
 
-//TODO
-pub fn quantified<'a, P>(p: P) -> impl Parser<'a, ParseElement>
-    where
-        P: Parser<'a, ParseElement>
-{
-    p
+struct ReferenceIterator<'a, T> {
+    backing_slice: &'a[T],
+    index: usize,
 }
+
+impl<T> ReferenceIteratorGenerator<T> {
+    fn new<I: IntoIterator<Item = T>>(iterable: I) -> Self {
+        ReferenceIteratorGenerator{
+            container: iterable.into_iter().collect(),
+        }
+    }
+
+    fn iter(&self) -> ReferenceIterator<T> {
+        ReferenceIterator {
+            backing_slice: self.container.as_slice(),
+            index: 0,
+        }
+    }
+}
+
+impl<'a, T> Iterator for ReferenceIterator<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.backing_slice.len() {Some(&self.backing_slice[self.index])} else {None}
+    }
+} 
