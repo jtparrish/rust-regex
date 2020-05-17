@@ -36,6 +36,24 @@ pub fn right<'a, P1, P2, R1, R2>(p1: P1, p2: P2) -> impl Parser<'a, R2>
     map(pair(p1, p2), |(_r1, r2)| r2)
 }
 
+pub fn center<'a, P1, P2, P3, R1, R2, R3>(p1: P1, p2: P2, p3: P3) -> impl Parser<'a, R2>
+    where
+        P1: Parser<'a, R1>,
+        P2: Parser<'a, R2>,
+        P3: Parser<'a, R3>,
+{
+    right(p1, left(p2, p3))
+}
+
+pub fn outside<'a, P1, P2, P3, R1, R2, R3>(p1: P1, p2: P2, p3: P3) -> impl Parser<'a, (R1, R3)>
+    where
+        P1: Parser<'a, R1>,
+        P2: Parser<'a, R2>,
+        P3: Parser<'a, R3>,
+{
+    pair(p1, right(p2, p3))
+}
+
 //TODO: make assertions about start and stop for valid range
 pub fn repeat_range<'a, P, R>(p: P, start: usize, stop: Option<usize>) -> impl Parser<'a, Vec<R>>
     where
