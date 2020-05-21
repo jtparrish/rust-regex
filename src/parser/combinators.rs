@@ -134,6 +134,14 @@ pub fn one_of<'a, R, I, P>(iterable: I) -> impl Parser<'a, R>
         }
 }
 
+pub fn lazy<'a, F, P, A>(create_p: F) -> impl Parser<'a, A>
+    where
+        F: Fn() -> P,
+        P: Parser<'a, A>,
+{
+    move |input| create_p().parse(input)
+}
+
 struct ReferenceIteratorGenerator<T> {
     container: Vec<T>,
 }
@@ -162,6 +170,15 @@ impl<'a, T> Iterator for ReferenceIterator<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.backing_slice.len() {Some(&self.backing_slice[self.index])} else {None}
+        let ret;
+        
+        if self.index < self.backing_slice.len() {
+            ret = Some(&self.backing_slice[self.index]);
+            self.index += 1;
+        } else {
+            ret = None;
+        };
+
+        ret
     }
 } 

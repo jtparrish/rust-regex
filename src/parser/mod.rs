@@ -64,6 +64,7 @@ impl<'a, T> Parser<'a, T> for BoxedParser<'a, T> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Expression {
     alt: Alternation,
 }
@@ -74,6 +75,7 @@ impl Expression {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Alternation {
     choices: Vec<SubExpression>
 }
@@ -84,6 +86,7 @@ impl Alternation {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct SubExpression {
     tokens: Vec<QuantifiedToken>
 }
@@ -94,11 +97,13 @@ impl SubExpression {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum QuantifiedToken {
     Singleton(Token),
     Quantified(Token, Quantifier)
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Token {
     Char(char),
     IndirectMatch(IndirectMatch),
@@ -107,21 +112,25 @@ pub enum Token {
     Unimpl,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Anchor {
     Begin,
     End,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Group {
     Capturing(usize, Box<Expression>),
     NonCapturing(Box<Expression>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Quantifier {
     Lazy(RawQuantifier),
     Greedy(RawQuantifier),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum RawQuantifier {
     Kleene,
     Plus,
@@ -130,22 +139,26 @@ pub enum RawQuantifier {
     Range(usize, Option<usize>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum IndirectMatch {
     WildCard,
     Class(CharClass),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum CharClass {
     Regular(RawCharClass),
     Inverted(RawCharClass),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum RawCharClass {
     CharGroup(Vec<char>),
     CharRange(char, char),
     SpecialSet(CharSet),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum CharSet {
     Word,
     WhiteSpace,
@@ -153,19 +166,21 @@ pub enum CharSet {
     UnicodeCategory(UnicodeCategory),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum UnicodeCategory {
     Punctuation,
+}
 
+//TODO: CONSIDER UNRESERVING '-', flip order of char class parsers
+fn not_reserved(c: &char) -> bool {
+    let reserved = ['[', ']', '(', ')', '*', '?', '+', '.', '\\', '-'];
+
+    reserved.iter().find(|x| *x == c).is_none()
 }
 
 //TODO
-fn not_reserved(_c: &char) -> bool {
-    true
-}
-
-//TODO
-fn escapable(_c: &char) -> bool {
-    false
+fn escapable(c: &char) -> bool {
+    !not_reserved(c)
 }
 
 fn map_literal_charset(c: char) -> Option<CharSet> {
@@ -222,7 +237,7 @@ mod tests {
         assert_eq!(Ok(( 'h', "ello" )), any_char_lc.parse("Hello"));
         assert_eq!(Err(ParserError::Error("".to_owned())), any_char_lc.parse(""));
 
-        let parse_hello_to_bool = map(match_literal("Hello"), |unit| true);
+        let parse_hello_to_bool = map(match_literal("Hello"), |_unit| true);
         assert_eq!(Ok(( true, "" )), parse_hello_to_bool.parse("Hello"));
         assert_eq!(Err(ParserError::Error("Hola".to_owned())), parse_hello_to_bool.parse("Hola"));
     }
@@ -279,6 +294,111 @@ mod tests {
 
         assert_eq!(Ok((' ', "hello")), white_space_remover.parse(leading_space));
         assert_eq!(Err(ParserError::Error("hello".to_owned())), white_space_remover.parse(no_leading_space))
+    }
+
+    #[test]
+    fn test_optional() {
+        let maybe_j = optional(match_literal("J"));
+
+        assert_eq!(Ok((Some(()), "")), maybe_j.parse("J"));
+        assert_eq!(Ok((None, "K")), maybe_j.parse("K"));
+    }
+
+    #[test]
+    fn test_quantifier() {
+        let quant_parser = parsers::quantifiers::quantifier();
+
+        assert_eq!(Ok((Quantifier::Greedy(RawQuantifier::Kleene), "")), quant_parser.parse("*"));
+    }
+
+    #[test]
+    fn test_parser() {
+        let t_parser = parsers::expression();
+        println!("BUILT!");
+        assert_eq!(
+            Ok((
+                Expression{
+                    alt: Alternation{
+                        choices: vec![
+                            SubExpression{ 
+                                tokens: vec![
+                                    QuantifiedToken::Singleton(Token::Char('J')),
+                                    QuantifiedToken::Singleton(Token::Char('T'))
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                ""
+            )),
+
+            t_parser.parse("JT")
+        )
+    }
+
+    #[test]
+    fn test_parser_print() {
+        let par = parsers::expression();
+        let expr = par.parse("a*b(?:[a-e])((i?)[\\w][^a-e])");
+        println!("{:#?}", expr);
+    }
+
+    #[test]
+    fn test_number() {
+        let t_parser = parsers::number();
+        println!("BUILT!");
+        assert_eq!(
+            Ok((10000,
+                ""
+            )),
+
+            t_parser.parse("10000")
+        )
+    }
+
+    #[test]
+    fn test_char_token() {
+        let t_parser = parsers::token();
+        println!("BUILT!");
+        assert_eq!(
+            Ok((
+                Token::Char('J'),
+                ""
+            )),
+
+            t_parser.parse("J")
+        )
+    }
+
+    #[test]
+    fn test_pq_char_token() {
+        let t_parser = parsers::pqtoken();
+        println!("BUILT!");
+        assert_eq!(
+            Ok((
+                QuantifiedToken::Singleton(Token::Char('J')),
+                ""
+            )),
+
+            t_parser.parse("JT")
+        )
+    }
+
+    #[test]
+    fn test_subexpression() {
+        let t_parser = parsers::sub_expression();
+        println!("BUILT!");
+        assert_eq!(
+            Ok((
+                SubExpression{
+                    tokens: vec![QuantifiedToken::Singleton(Token::Char('J')), QuantifiedToken::Singleton(Token::Char('J'))],
+                },
+                ""
+            )),
+
+            t_parser.parse("JT")
+        )
     }
 }
 

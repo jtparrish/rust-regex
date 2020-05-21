@@ -9,8 +9,6 @@ use super::BoxedParser;
 // use super::macros;
 use super::{CharClass, RawCharClass, IndirectMatch, CharSet, UnicodeCategory, Group, Anchor, map_anchor};
 
-use super::UnimplementedParser;
-
 pub fn match_literal<'a>(expected: &str) -> impl Parser<'a, ()> {
     let owned_expect = expected.to_owned();
 
@@ -29,6 +27,7 @@ pub fn any_char(input: &str) -> ParserResult<char> {
 pub fn number<'a>() -> impl Parser<'a, usize> {
     one_or_more(any_char.predicate(|c| c.is_ascii_digit())).map(|v| v.into_iter().collect::<String>().parse::<usize>().expect("parser should only generate valid arabic numeral strings"))
 }
+
 pub mod char {
     //FIXME CLEANME
     use super::*;
@@ -115,7 +114,7 @@ pub mod indirect_match {
             }
 
             pub fn raw_class_inner<'a>() -> impl Parser<'a, RawCharClass> {
-                one_of!(RawCharClass, character_group(), character_range(), special_set::special_set())
+                one_of!(RawCharClass, special_set::special_set(), character_range(), character_group())
             }
 
             pub fn character_group<'a>() -> impl Parser<'a, RawCharClass> {
@@ -161,24 +160,26 @@ pub fn group<'a>() -> impl Parser<'a, Token> {
 
 //FIXME: Index
 pub fn cgroup<'a>() -> impl Parser<'a, Group> {
-    center(match_literal("("), expression(), match_literal(")")).map(|e| Group::Capturing(0, Box::new(e)))
+    center(match_literal("("), lazy(expression), match_literal(")")).map(|e| Group::Capturing(0, Box::new(e)))
 }
 
 pub fn ncgroup<'a>() -> impl Parser<'a, Group> {
-    center(match_literal("(?:"), expression(), match_literal(")")).map(|e| Group::NonCapturing(Box::new(e)))
+    center(match_literal("(?:"), lazy(expression), match_literal(")")).map(|e| Group::NonCapturing(Box::new(e)))
 }
 
-mod quantifiers {
+pub mod quantifiers {
     //FIXME: CLEAN THIS
     use super::*;
     //should all quantifiers be allowed to be lazy?
     pub fn quantifier<'a>() -> impl Parser<'a, Quantifier> {
-        pair(raw::raw_quantifier(), optional(match_literal("?"))).map(|(r, l)| match l {
-                                                                            Some(_) => Quantifier::Lazy(r),
-                                                                            None => Quantifier::Greedy(r)
-                                                                        })
+        pair(raw::raw_quantifier(), optional(match_literal("?")))
+            .map(|(r, l)|
+                match l {
+                    Some(_) => Quantifier::Lazy(r),
+                    None => Quantifier::Greedy(r)
+                })
     }
-    mod raw {
+    pub mod raw {
         //FIXME: CLEAN THIS
         use super::*;
 
@@ -186,7 +187,7 @@ mod quantifiers {
             one_of!(RawQuantifier, range_quantifier(), kleene_star_quantifier(), plus_quantifier(), question_quantifier())
         }
     
-        fn range_quantifier<'a>() -> impl Parser<'a, RawQuantifier> {
+        pub fn range_quantifier<'a>() -> impl Parser<'a, RawQuantifier> {
             center(match_literal("{"), pair(number(), optional(right(match_literal(".."), optional(number())))), match_literal("}"))
                 .map(|(l, o)| match o {
                     Some(h) => RawQuantifier::Range(l, h),
@@ -194,16 +195,16 @@ mod quantifiers {
                 })
         }
     
-        fn kleene_star_quantifier<'a>() -> impl Parser<'a, RawQuantifier> {
-            match_literal("*").map(|u| RawQuantifier::Kleene)
+        pub fn kleene_star_quantifier<'a>() -> impl Parser<'a, RawQuantifier> {
+            match_literal("*").map(|_u| RawQuantifier::Kleene)
         }
     
-        fn plus_quantifier<'a>() -> impl Parser<'a, RawQuantifier> {
-            match_literal("+").map(|u| RawQuantifier::Kleene)
+        pub fn plus_quantifier<'a>() -> impl Parser<'a, RawQuantifier> {
+            match_literal("+").map(|_u| RawQuantifier::Plus)
         }
     
-        fn question_quantifier<'a>() -> impl Parser<'a, RawQuantifier> {
-            match_literal("?").map(|u| RawQuantifier::Kleene)
+        pub fn question_quantifier<'a>() -> impl Parser<'a, RawQuantifier> {
+            match_literal("?").map(|_u| RawQuantifier::Possible)
         }
     }
 }
